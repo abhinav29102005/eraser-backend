@@ -1,35 +1,52 @@
-// --- prisma/schema.prisma ---
-// This schema includes the new 'hashedPassword' field for users and the
-// 'documentState' field for boards, which is where the Yjs document is stored.
+// prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql" // for local use, or "postgresql" if later switching to Neon
   url      = env("DATABASE_URL")
 }
 
+// User Model
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  hashedPassword String?
+  id        String   @id @default(cuid()) // Using cuid() for shorter, URL-safe IDs, as previously discussed.
+  email     String   @unique // User's email, must be unique
+  password  String  //hashed password
+  name      String?  // Optional name
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  boards    Board[]
+  boards    Board[] // Relation to Board model: A User can have many Boards
 }
 
+// Board Model
 model Board {
-  id        String   @id @default(cuid())
-  title     String?  @default("Untitled Board")
-  isDeleted Boolean  @default(false)
-  documentState Bytes?
+  id        String   @id @default(cuid()) // Using cuid() for shorter, URL-safe IDs
+  title     String?  @default("Untitled Board") // Using 'title' for consistency and default value
+  isDeleted Boolean  @default(false) // For soft deletion
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
+
+  userId    String // Foreign key to User model
+  user      User     @relation(fields: [userId], references: [id]) // Relation to User
+
+  strokes   Stroke[] // Relation to Stroke model: A Board can have many Strokes
 }
 
-// NOTE: The Stroke model from V1 is no longer required for V2, as drawing data
-// is now stored in the Yjs 'documentState' field on the Board model.
+// Stroke Model
+model Stroke {
+  id          String    @id @default(cuid()) // Using cuid() for consistency
+  points      Json      // Storing XY points as JSON
+  tool        String?   // Optional: Store the tool used (e.g., "pen", "eraser")
+  color       String?   // Optional: Stroke color
+  strokeWidth Int?      // Optional: Stroke width
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt // Add updatedAt for consistency
+
+  boardId     String    // Foreign key to Board model
+  board       Board     @relation(fields: [boardId], references: [id], onDelete: Cascade) // Relation to Board
+
+  @@index([boardId]) // Index for faster lookup of strokes by board
+}
