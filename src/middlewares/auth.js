@@ -1,20 +1,32 @@
-// --- src/middlewares/auth.js ---
+const { verifyToken } = require('../services/jwt');
+const prisma = require('../services/prisma');
+const { AuthenticationError } = require('../utils/errors');
 
-const { verifyToken } = require("../services/jwt");
-const prisma = require("../services/prisma");
 const authMiddleware = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ message: "No token provided or invalid format" });}
-  const token = authHeader.split(" ")[1];
   try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new AuthenticationError('No token provided');
+    }
+
+    const token = authHeader.split(' ')[1];
     const decoded = verifyToken(token);
-    const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
-    if (!user) {return res.status(401).json({ message: "User not found" });}
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { id: true, email: true, name: true, createdAt: true },
+    });
+
+    if (!user) {
+      throw new AuthenticationError('User not found');
+    }
+
     req.user = user;
-    next();} catch (error) {
-    console.error("JWT Verification Error:", error);
-    if (error.name === "TokenExpiredError") {return res.status(401).json({ message: "Token expired" });}
-    return res.status(401).json({ message: "Invalid token" });}
+    next();
+  } catch (error) {
+    next(error);
+  }
 };
+
 module.exports = authMiddleware;

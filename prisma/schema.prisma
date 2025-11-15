@@ -1,52 +1,80 @@
-// prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql" // for local use, or "postgresql" if later switching to Neon
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-// User Model
+// ==========================================
+// USER MODEL
+// ==========================================
 model User {
-  id        String   @id @default(cuid()) // Using cuid() for shorter, URL-safe IDs, as previously discussed.
-  email     String   @unique // User's email, must be unique
-  password  String  //hashed password
-  name      String?  // Optional name
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  boards    Board[] // Relation to Board model: A User can have many Boards
+  id              String   @id @default(cuid())
+  email           String   @unique
+  hashedPassword  String
+  name            String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  boards          Board[]
+  collaborations  BoardCollaborator[]
+  
+  @@index([email])
 }
 
-// Board Model
+// ==========================================
+// BOARD MODEL
+// ==========================================
 model Board {
-  id        String   @id @default(cuid()) // Using cuid() for shorter, URL-safe IDs
-  title     String?  @default("Untitled Board") // Using 'title' for consistency and default value
-  isDeleted Boolean  @default(false) // For soft deletion
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String   @id @default(cuid())
+  title          String   @default("Untitled Board")
+  
+  // Store all drawing elements as JSON
+  documentState  Json     @default("[]")
+  
+  // Metadata
+  isDeleted      Boolean  @default(false)
+  isPublic       Boolean  @default(false)
+  shareToken     String?  @unique
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  lastEditedAt   DateTime @default(now())
 
-  userId    String // Foreign key to User model
-  user      User     @relation(fields: [userId], references: [id]) // Relation to User
-
-  strokes   Stroke[] // Relation to Stroke model: A Board can have many Strokes
+  // Foreign keys
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Relations
+  collaborators  BoardCollaborator[]
+  
+  @@index([userId])
+  @@index([createdAt])
+  @@index([lastEditedAt])
+  @@index([isDeleted])
 }
 
-// Stroke Model
-model Stroke {
-  id          String    @id @default(cuid()) // Using cuid() for consistency
-  points      Json      // Storing XY points as JSON
-  tool        String?   // Optional: Store the tool used (e.g., "pen", "eraser")
-  color       String?   // Optional: Stroke color
-  strokeWidth Int?      // Optional: Stroke width
+// ==========================================
+// BOARD COLLABORATOR MODEL
+// ==========================================
+model BoardCollaborator {
+  id         String   @id @default(cuid())
+  
+  permission String   @default("edit") // "view" | "edit" | "admin"
+  
+  joinedAt   DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  
+  boardId    String
+  board      Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt // Add updatedAt for consistency
-
-  boardId     String    // Foreign key to Board model
-  board       Board     @relation(fields: [boardId], references: [id], onDelete: Cascade) // Relation to Board
-
-  @@index([boardId]) // Index for faster lookup of strokes by board
+  @@unique([boardId, userId])
+  @@index([boardId])
+  @@index([userId])
 }
